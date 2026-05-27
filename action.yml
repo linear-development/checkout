@@ -1,0 +1,91 @@
+name: Checkout with retry
+description: >
+  Drop-in checkout replacement with retry on network failures.
+  Uses useblacksmith/checkout for Blacksmith git mirror cache on Blacksmith
+  runners and falls back to standard clone on non-Blacksmith environments.
+
+inputs:
+  persist-credentials:
+    description: Whether to configure the token with the local git config
+    default: "true"
+  fetch-depth:
+    description: Number of commits to fetch. 0 indicates all history for all branches and tags.
+    default: "1"
+  ref:
+    description: The branch, tag or SHA to checkout.
+    default: ""
+  submodules:
+    description: Whether to checkout submodules (true or recursive).
+    default: "false"
+  sparse-checkout:
+    description: Do a sparse checkout on given patterns. Each pattern should be separated with new lines.
+    default: ""
+  token:
+    description: Personal access token used to fetch the repository.
+    default: ${{ github.token }}
+  repository:
+    description: Repository name with owner.
+    default: ${{ github.repository }}
+
+runs:
+  using: composite
+  steps:
+    # Attempt 1
+    - id: attempt1
+      continue-on-error: true
+      uses: useblacksmith/checkout@c9796daa2a4bdebdab5bd16be2c09a70cd4e1121 # main 2025-04-28
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: "1000"
+        GIT_HTTP_LOW_SPEED_TIME: "30"
+      with:
+        persist-credentials: ${{ inputs.persist-credentials }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        ref: ${{ inputs.ref }}
+        submodules: ${{ inputs.submodules }}
+        sparse-checkout: ${{ inputs.sparse-checkout }}
+        token: ${{ inputs.token }}
+        repository: ${{ inputs.repository }}
+
+    # Attempt 2 (after 10s backoff)
+    - if: steps.attempt1.outcome == 'failure'
+      shell: bash
+      run: |
+        echo "::warning::Checkout attempt 1 failed. Retrying in 10s..."
+        sleep 10
+
+    - id: attempt2
+      if: steps.attempt1.outcome == 'failure'
+      continue-on-error: true
+      uses: useblacksmith/checkout@c9796daa2a4bdebdab5bd16be2c09a70cd4e1121 # main 2025-04-28
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: "1000"
+        GIT_HTTP_LOW_SPEED_TIME: "30"
+      with:
+        persist-credentials: ${{ inputs.persist-credentials }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        ref: ${{ inputs.ref }}
+        submodules: ${{ inputs.submodules }}
+        sparse-checkout: ${{ inputs.sparse-checkout }}
+        token: ${{ inputs.token }}
+        repository: ${{ inputs.repository }}
+
+    # Attempt 3 (after 15s backoff) -- no continue-on-error, fails the step on error
+    - if: steps.attempt1.outcome == 'failure' && steps.attempt2.outcome == 'failure'
+      shell: bash
+      run: |
+        echo "::warning::Checkout attempt 2 failed. Final retry in 15s..."
+        sleep 15
+
+    - if: steps.attempt1.outcome == 'failure' && steps.attempt2.outcome == 'failure'
+      uses: useblacksmith/checkout@c9796daa2a4bdebdab5bd16be2c09a70cd4e1121 # main 2025-04-28
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: "1000"
+        GIT_HTTP_LOW_SPEED_TIME: "30"
+      with:
+        persist-credentials: ${{ inputs.persist-credentials }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        ref: ${{ inputs.ref }}
+        submodules: ${{ inputs.submodules }}
+        sparse-checkout: ${{ inputs.sparse-checkout }}
+        token: ${{ inputs.token }}
+        repository: ${{ inputs.repository }}
