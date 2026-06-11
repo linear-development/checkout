@@ -20,6 +20,17 @@ inputs:
   sparse-checkout:
     description: Do a sparse checkout on given patterns. Each pattern should be separated with new lines.
     default: ""
+  sparse-checkout-cone-mode:
+    description: >
+      Whether to use cone-mode when doing a sparse checkout. Set to "false" to allow
+      gitignore-style include/exclude (denylist) patterns with leading slashes and "!".
+    default: "true"
+  filter:
+    description: >
+      Partially clone against a given filter (e.g. blob:none). Note: setting
+      sparse-checkout already implies --filter=blob:none, so this is only needed to
+      override that (e.g. tree:0) or to filter without a sparse set.
+    default: ""
   token:
     description: Personal access token used to fetch the repository.
     default: ${{ github.token }}
@@ -30,7 +41,6 @@ inputs:
 runs:
   using: composite
   steps:
-    # Attempt 1
     - id: attempt1
       continue-on-error: true
       uses: useblacksmith/checkout@c9796daa2a4bdebdab5bd16be2c09a70cd4e1121 # main 2026-04-28
@@ -43,16 +53,19 @@ runs:
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
+        filter: ${{ inputs.filter }}
         token: ${{ inputs.token }}
         repository: ${{ inputs.repository }}
 
-    # Attempt 2 (after 10s backoff)
     - if: steps.attempt1.outcome == 'failure'
       shell: bash
       run: |
         echo "::warning::Checkout attempt 1 failed. Retrying in 10s..."
         sleep 10
 
+    # A skipped step's outcome is 'skipped', so checking attempt2 == 'failure'
+    # below already implies attempt1 failed.
     - id: attempt2
       if: steps.attempt1.outcome == 'failure'
       continue-on-error: true
@@ -66,17 +79,19 @@ runs:
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
+        filter: ${{ inputs.filter }}
         token: ${{ inputs.token }}
         repository: ${{ inputs.repository }}
 
-    # Attempt 3 (after 15s backoff) -- no continue-on-error, fails the step on error
-    - if: steps.attempt1.outcome == 'failure' && steps.attempt2.outcome == 'failure'
+    - if: steps.attempt2.outcome == 'failure'
       shell: bash
       run: |
         echo "::warning::Checkout attempt 2 failed. Final retry in 15s..."
         sleep 15
 
-    - if: steps.attempt1.outcome == 'failure' && steps.attempt2.outcome == 'failure'
+    # Final attempt: no continue-on-error, so failure here fails the step.
+    - if: steps.attempt2.outcome == 'failure'
       uses: useblacksmith/checkout@c9796daa2a4bdebdab5bd16be2c09a70cd4e1121 # main 2026-04-28
       env:
         GIT_HTTP_LOW_SPEED_LIMIT: "1000"
@@ -87,5 +102,7 @@ runs:
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
+        filter: ${{ inputs.filter }}
         token: ${{ inputs.token }}
         repository: ${{ inputs.repository }}
