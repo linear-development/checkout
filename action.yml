@@ -20,6 +20,11 @@ inputs:
   sparse-checkout:
     description: Do a sparse checkout on given patterns. Each pattern should be separated with new lines.
     default: ""
+  sparse-checkout-cone-mode:
+    description: >
+      Whether to use cone-mode when doing a sparse checkout. Set to "false" to pass
+      gitignore-style patterns (including negation) to `git sparse-checkout set --no-cone`.
+    default: "true"
   token:
     description: Personal access token used to fetch the repository.
     default: ${{ github.token }}
@@ -43,6 +48,7 @@ runs:
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
         token: ${{ inputs.token }}
         repository: ${{ inputs.repository }}
 
@@ -66,6 +72,7 @@ runs:
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
         token: ${{ inputs.token }}
         repository: ${{ inputs.repository }}
 
@@ -87,5 +94,6 @@ runs:
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
         token: ${{ inputs.token }}
         repository: ${{ inputs.repository }}
