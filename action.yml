@@ -37,23 +37,33 @@ runs:
       env:
         REQUESTED: ${{ inputs.fetch-depth }}
         RUNNER_NAME_CTX: ${{ runner.name }}
+        SPARSE: ${{ inputs.sparse-checkout }}
       run: |
         # An explicit request always wins.
         if [ -n "$REQUESTED" ]; then
           echo "value=$REQUESTED" >> "$GITHUB_OUTPUT"
           exit 0
         fi
-        # On Blacksmith the git mirror is attached through git alternates, so full
-        # history is already on local disk and costs nothing to fetch. A shallow
-        # request is the expensive one: git cannot satisfy a depth boundary from
-        # alternates, so it negotiates a purpose-built pack from the remote. Measured
-        # on linear-app, depth 0 ran 16.4s median against 30.0s for depth 1, and every
-        # depth-0 sample beat every depth-1 sample. Runners without the mirror keep
-        # the shallow default, where a full clone would be a real download.
+        # Full history is only cheap where the Blacksmith git mirror is attached through
+        # git alternates: the objects are already on local disk, and asking for a depth
+        # boundary instead forces git to negotiate a purpose-built pack from the remote.
+        # Measured on linear-app, qualifying jobs went from 36-40s to 18-22s.
+        #
+        # Two cases must stay shallow, both measured on the same run:
+        #   - Container jobs (workspace under /__w) do not get the mirror mounted, so a
+        #     full clone is a real download: db-schema went 28s -> 202s.
+        #   - Sparse checkouts deliberately ask for a minimal tree, and handing them all
+        #     of history undoes that: job-cache went 54s -> 115s.
+        depth=1
         case "$RUNNER_NAME_CTX" in
-          blacksmith-*) echo "value=0" >> "$GITHUB_OUTPUT" ;;
-          *)            echo "value=1" >> "$GITHUB_OUTPUT" ;;
+          blacksmith-*)
+            case "$GITHUB_WORKSPACE" in
+              /__w/*) depth=1 ;;
+              *) [ -n "$SPARSE" ] || depth=0 ;;
+            esac
+            ;;
         esac
+        echo "value=$depth" >> "$GITHUB_OUTPUT"
 
     # Attempt 1
     - id: attempt1
