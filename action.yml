@@ -9,8 +9,10 @@ inputs:
     description: Whether to configure the token with the local git config
     default: "true"
   fetch-depth:
-    description: Number of commits to fetch. 0 indicates all history for all branches and tags.
-    default: "1"
+    description: >
+      Number of commits to fetch. 0 indicates all history for all branches and tags.
+      Leave unset to pick per runner: full history on Blacksmith, shallow elsewhere.
+    default: ""
   ref:
     description: The branch, tag or SHA to checkout.
     default: ""
@@ -30,6 +32,29 @@ inputs:
 runs:
   using: composite
   steps:
+    - id: depth
+      shell: bash
+      env:
+        REQUESTED: ${{ inputs.fetch-depth }}
+        RUNNER_NAME_CTX: ${{ runner.name }}
+      run: |
+        # An explicit request always wins.
+        if [ -n "$REQUESTED" ]; then
+          echo "value=$REQUESTED" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        # On Blacksmith the git mirror is attached through git alternates, so full
+        # history is already on local disk and costs nothing to fetch. A shallow
+        # request is the expensive one: git cannot satisfy a depth boundary from
+        # alternates, so it negotiates a purpose-built pack from the remote. Measured
+        # on linear-app, depth 0 ran 16.4s median against 30.0s for depth 1, and every
+        # depth-0 sample beat every depth-1 sample. Runners without the mirror keep
+        # the shallow default, where a full clone would be a real download.
+        case "$RUNNER_NAME_CTX" in
+          blacksmith-*) echo "value=0" >> "$GITHUB_OUTPUT" ;;
+          *)            echo "value=1" >> "$GITHUB_OUTPUT" ;;
+        esac
+
     # Attempt 1
     - id: attempt1
       continue-on-error: true
@@ -39,7 +64,7 @@ runs:
         GIT_HTTP_LOW_SPEED_TIME: "30"
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
-        fetch-depth: ${{ inputs.fetch-depth }}
+        fetch-depth: ${{ steps.depth.outputs.value }}
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
@@ -62,7 +87,7 @@ runs:
         GIT_HTTP_LOW_SPEED_TIME: "30"
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
-        fetch-depth: ${{ inputs.fetch-depth }}
+        fetch-depth: ${{ steps.depth.outputs.value }}
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
@@ -83,7 +108,7 @@ runs:
         GIT_HTTP_LOW_SPEED_TIME: "30"
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
-        fetch-depth: ${{ inputs.fetch-depth }}
+        fetch-depth: ${{ steps.depth.outputs.value }}
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
