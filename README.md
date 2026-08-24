@@ -25,7 +25,7 @@ All inputs are optional and mirror [actions/checkout](https://github.com/actions
 | Input | Default | Description |
 |-------|---------|-------------|
 | `persist-credentials` | `true` | Whether to configure the token with the local git config |
-| `fetch-depth` | `1` | Number of commits to fetch. `0` for all history. |
+| `fetch-depth` | auto | Number of commits to fetch. `0` for all history. Left unset it resolves per runner: `0` where a git mirror is attached and makes full history free, and `1` elsewhere and for container or sparse-checkout jobs, which do not benefit from it. |
 | `ref` | | The branch, tag, or SHA to checkout. When checking out the repository that triggered a workflow, this defaults to the reference or SHA for that event. Otherwise, uses the default branch. |
 | `submodules` | `false` | Whether to checkout submodules (`true` or `recursive`) |
 | `sparse-checkout` | | Sparse checkout patterns (newline-separated) |

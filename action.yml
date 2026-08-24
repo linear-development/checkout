@@ -9,8 +9,11 @@ inputs:
     description: Whether to configure the token with the local git config
     default: "true"
   fetch-depth:
-    description: Number of commits to fetch. 0 indicates all history for all branches and tags.
-    default: "1"
+    description: >
+      Number of commits to fetch. 0 indicates all history for all branches and tags.
+      Leave unset to pick per runner: full history where a git mirror is attached,
+      shallow elsewhere.
+    default: ""
   ref:
     description: The branch, tag or SHA to checkout.
     default: ""
@@ -41,6 +44,40 @@ inputs:
 runs:
   using: composite
   steps:
+    - id: depth
+      shell: bash
+      env:
+        REQUESTED: ${{ inputs.fetch-depth }}
+        RUNNER_NAME_CTX: ${{ runner.name }}
+        SPARSE: ${{ inputs.sparse-checkout }}
+      run: |
+        # An explicit request always wins.
+        if [ -n "$REQUESTED" ]; then
+          echo "value=$REQUESTED" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        # Full history is only cheap where the runner's git mirror is attached through
+        # git alternates: the objects are already on local disk, and asking for a depth
+        # boundary instead forces git to negotiate a purpose-built pack from the remote.
+        # Measured on linear-app, qualifying jobs went from 36-40s to 18-22s.
+        #
+        # Two cases must stay shallow, both measured on the same run:
+        #   - Container jobs (workspace under /__w) do not get the mirror mounted, so a
+        #     full clone is a real download: db-schema went 28s -> 202s.
+        #   - Sparse checkouts deliberately ask for a minimal tree, and handing them all
+        #     of history undoes that: job-cache went 54s -> 115s.
+        depth=1
+        case "$RUNNER_NAME_CTX" in
+          blacksmith-*)
+            case "$GITHUB_WORKSPACE" in
+              /__w/*) depth=1 ;;
+              *) [ -n "$SPARSE" ] || depth=0 ;;
+            esac
+            ;;
+        esac
+        echo "value=$depth" >> "$GITHUB_OUTPUT"
+
+    # Attempt 1
     - id: attempt1
       continue-on-error: true
       uses: useblacksmith/checkout@c9796daa2a4bdebdab5bd16be2c09a70cd4e1121 # main 2026-04-28
@@ -49,7 +86,7 @@ runs:
         GIT_HTTP_LOW_SPEED_TIME: "30"
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
-        fetch-depth: ${{ inputs.fetch-depth }}
+        fetch-depth: ${{ steps.depth.outputs.value }}
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
@@ -75,7 +112,7 @@ runs:
         GIT_HTTP_LOW_SPEED_TIME: "30"
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
-        fetch-depth: ${{ inputs.fetch-depth }}
+        fetch-depth: ${{ steps.depth.outputs.value }}
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
@@ -98,7 +135,7 @@ runs:
         GIT_HTTP_LOW_SPEED_TIME: "30"
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
-        fetch-depth: ${{ inputs.fetch-depth }}
+        fetch-depth: ${{ steps.depth.outputs.value }}
         ref: ${{ inputs.ref }}
         submodules: ${{ inputs.submodules }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
