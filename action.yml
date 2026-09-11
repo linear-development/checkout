@@ -80,7 +80,7 @@ runs:
     # Attempt 1
     - id: attempt1
       continue-on-error: true
-      uses: useblacksmith/checkout@c9796daa2a4bdebdab5bd16be2c09a70cd4e1121 # main 2026-04-28
+      uses: useblacksmith/checkout@f50565632710173b0e366f2cd39b928d31362815 # v1.6.0
       env:
         GIT_HTTP_LOW_SPEED_LIMIT: "1000"
         GIT_HTTP_LOW_SPEED_TIME: "30"
@@ -106,7 +106,7 @@ runs:
     - id: attempt2
       if: steps.attempt1.outcome == 'failure'
       continue-on-error: true
-      uses: useblacksmith/checkout@c9796daa2a4bdebdab5bd16be2c09a70cd4e1121 # main 2026-04-28
+      uses: useblacksmith/checkout@f50565632710173b0e366f2cd39b928d31362815 # v1.6.0
       env:
         GIT_HTTP_LOW_SPEED_LIMIT: "1000"
         GIT_HTTP_LOW_SPEED_TIME: "30"
@@ -129,7 +129,7 @@ runs:
 
     # Final attempt: no continue-on-error, so failure here fails the step.
     - if: steps.attempt2.outcome == 'failure'
-      uses: useblacksmith/checkout@c9796daa2a4bdebdab5bd16be2c09a70cd4e1121 # main 2026-04-28
+      uses: useblacksmith/checkout@f50565632710173b0e366f2cd39b928d31362815 # v1.6.0
       env:
         GIT_HTTP_LOW_SPEED_LIMIT: "1000"
         GIT_HTTP_LOW_SPEED_TIME: "30"
